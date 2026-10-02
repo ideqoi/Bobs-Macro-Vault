@@ -85,7 +85,7 @@ button.greenbtn{background:var(--green);color:#000}
   pointer-events:none;
   transition:opacity 0.25s ease;
   box-shadow:0 6px 20px rgba(0,0,0,0.4);
-  z-index:99;
+  z-index:100;
 }
 .toast.show{opacity:1}
 .grid{
@@ -139,10 +139,6 @@ button.greenbtn{background:var(--green);color:#000}
   justify-content:center;
   gap:6px;
 }
-.copy-btn.copied{
-  background:var(--green);
-  color:#000;
-}
 .del-btn{
   width:auto;
   padding:8px 10px;
@@ -151,10 +147,10 @@ button.greenbtn{background:var(--green);color:#000}
   color:var(--red);
   border:1px solid rgba(239,68,68,0.4);
 }
-.add-modal{
+.modal-overlay{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.7);
+  background:rgba(0,0,0,0.75);
   backdrop-filter:blur(4px);
   display:flex;
   align-items:center;
@@ -183,7 +179,7 @@ button.greenbtn{background:var(--green);color:#000}
   <div class="header-top">
     <div>
       <h1>Bob's Macro JSON Vault &#x1F4BE;</h1>
-      <div class="subtitle">Cloud-Synced Macro Library &bull; Ready for Tracker Import</div>
+      <div class="subtitle">Cloud-Synced Base Library &bull; Portion Scaler &amp; JSON Copier</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px">
       <span id="syncStatusBadge" class="sync-indicator synced">&#x2601;&#xFE0F; Synced</span>
@@ -192,15 +188,15 @@ button.greenbtn{background:var(--green);color:#000}
     </div>
   </div>
   <div class="controls">
-    <input id="searchBar" type="text" placeholder="Search chicken, rice, pastries, milk..." oninput="filterItems()">
+    <input id="searchBar" type="text" placeholder="Search chicken, rice, pasta, pastries..." oninput="filterItems()">
     <select id="slotFilter" onchange="filterItems()">
-      <option value="All">All Slots</option>
-      <option value="Breakfast">Breakfast</option>
+      <option value="All">All Default Slots</option>
       <option value="Lunch">Lunch</option>
       <option value="Dinner">Dinner</option>
+      <option value="Breakfast">Breakfast</option>
       <option value="Snacks">Snacks</option>
     </select>
-    <button onclick="toggleModal(true)">+ Add Food Item</button>
+    <button onclick="toggleAddModal(true)">+ Add New Food</button>
   </div>
 </header>
 
@@ -208,14 +204,82 @@ button.greenbtn{background:var(--green);color:#000}
   <div id="vaultGrid" class="grid"></div>
 </main>
 
-<div id="toast" class="toast">JSON Copied to Clipboard!</div>
+<div id="toast" class="toast">Scaled JSON Copied to Clipboard!</div>
 
-<div id="addModal" class="add-modal hidden">
+<!-- Scaling & Copy Modal -->
+<div id="scaleModal" class="modal-overlay hidden">
   <div class="modal-card">
-    <h3 style="margin:0">Add New Food / Meal</h3>
-    <input id="newSlot" placeholder="Slot (Breakfast, Lunch, Dinner, Snacks)" value="Dinner">
-    <input id="newName" placeholder="Item Name (e.g. Rice Chex Cereal)">
-    <input id="newPortion" placeholder="Portion (e.g. 1 Bowl / 60g)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <h3 id="scaleItemTitle" style="margin:0 0 2px">Scale Food</h3>
+        <span class="subtitle" id="scaleItemBase"></span>
+      </div>
+      <button class="secondary" style="padding:4px 8px;font-size:12px" onclick="toggleScaleModal(false)">&#x2715;</button>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Meal Destination Slot:</label>
+      <select id="scaleMealSelect">
+        <option value="Lunch">Lunch</option>
+        <option value="Dinner">Dinner</option>
+        <option value="Breakfast">Breakfast</option>
+        <option value="Snacks">Snacks</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="scalePortionLabel">Portion Amount:</label>
+      <div class="modal-grid">
+        <input id="scalePortionAmount" type="number" step="0.1" placeholder="Amount" oninput="updateLiveScaledPreview()">
+        <select id="scalePortionUnit" onchange="updateLiveScaledPreview()">
+          <option value="g">grams (g)</option>
+          <option value="fl oz">fl oz</option>
+          <option value="oz">dry oz</option>
+          <option value="cake">cakes</option>
+          <option value="serving">servings</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:4px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Calculated Macros:</div>
+      <div class="macro-strip" style="margin:0;padding:0;border:none">
+        <div><strong id="prevCal">0</strong><br><small style="color:var(--muted)">kcal</small></div>
+        <div><strong id="prevP" style="color:var(--blue)">0g</strong><br><small style="color:var(--muted)">Pro</small></div>
+        <div><strong id="prevC" style="color:var(--cyan)">0g</strong><br><small style="color:var(--muted)">Carb</small></div>
+        <div><strong id="prevF" style="color:var(--orange)">0g</strong><br><small style="color:var(--muted)">Fat</small></div>
+        <div><strong id="prevFib" style="color:var(--green)">0g</strong><br><small style="color:var(--muted)">Fib</small></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button style="flex:1" onclick="executeScaledCopy()">&#x1F4CB; Copy JSON</button>
+      <button style="flex:1" class="secondary" onclick="toggleScaleModal(false)">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add New Food Base Modal -->
+<div id="addModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3 style="margin:0">Add New Food Base Item</h3>
+    <select id="newSlot">
+      <option value="Lunch">Lunch</option>
+      <option value="Dinner" selected>Dinner</option>
+      <option value="Breakfast">Breakfast</option>
+      <option value="Snacks">Snacks</option>
+    </select>
+    <input id="newName" placeholder="Item Name (e.g. Cooked Rice)">
+    <div class="modal-grid">
+      <input id="newBaseQty" type="number" step="0.1" placeholder="Base Qty (e.g. 100)">
+      <select id="newBaseUnit">
+        <option value="g">grams (g)</option>
+        <option value="fl oz">fl oz</option>
+        <option value="oz">dry oz</option>
+        <option value="cake">cakes</option>
+        <option value="serving">servings</option>
+      </select>
+    </div>
     <div class="modal-grid">
       <input id="newCal" type="number" placeholder="Calories (kcal)">
       <input id="newP" type="number" step="0.1" placeholder="Protein (g)">
@@ -225,7 +289,7 @@ button.greenbtn{background:var(--green);color:#000}
     <input id="newFib" type="number" step="0.1" placeholder="Fiber (g)" value="0">
     <div style="display:flex;gap:8px;margin-top:6px">
       <button style="flex:1" onclick="saveNewItem()">Save to Cloud</button>
-      <button style="flex:1" class="secondary" onclick="toggleModal(false)">Cancel</button>
+      <button style="flex:1" class="secondary" onclick="toggleAddModal(false)">Cancel</button>
     </div>
   </div>
 </div>
@@ -233,45 +297,44 @@ button.greenbtn{background:var(--green);color:#000}
 <script>
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmF3EulnV9FtW40ma82jEf2BY-i5RWsUHjKvIUXrOVP1gbcEv6GoylIG6iEanrnK72/exec";
 
+// Master library normalized to numeric base quantities and units
 const DEFAULT_DATABASE = [
-  {slot:"Dinner",name:"Canned Chunk Chicken Breast (Whole Can)",portion:"1 Can (8 oz / 224g drained)",cal:240,p:44.0,c:4.0,fiber:0,fat:4.0},
-  {slot:"Dinner",name:"Great Value Long Grain Rice Pouch (Coconut)",portion:"1 Pouch (240g)",cal:360,p:7.0,c:72.0,fiber:3.0,fat:6.0},
-  {slot:"Dinner",name:"Butter",portion:"1 tbsp (14g)",cal:102,p:0.1,c:0.0,fiber:0,fat:11.5},
-  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Regular, No Oil/Mayo)",portion:"1 Sub (Regular)",cal:530,p:39.0,c:66.0,fiber:3.0,fat:11.5},
-  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Regular w/ Extra Cheese, No Oil/Mayo)",portion:"1 Sub (Regular w/ Extra Cheese)",cal:650,p:48.0,c:67.0,fiber:3.0,fat:20.5},
-  {slot:"Dinner",name:"Toaster Pastries",portion:"1 Pack (2 pastries / 96g)",cal:350,p:3.0,c:62.0,fiber:1.0,fat:8.0},
-  {slot:"Breakfast",name:"1% Low-Fat Milk",portion:"32 fl oz (960ml)",cal:416,p:32.0,c:48.0,fiber:0,fat:9.6},
-  {slot:"Breakfast",name:"2% Reduced-Fat Milk",portion:"32 fl oz (960ml)",cal:480,p:32.0,c:48.0,fiber:0,fat:19.2},
-  {slot:"Snacks",name:"PICS Caramel Rice Cake",portion:"1 Cake (13g)",cal:50,p:0.5,c:11.0,fiber:0,fat:0},
-  {slot:"Snacks",name:"PICS Caramel Rice Cakes (2 Cakes)",portion:"2 Cakes (26g)",cal:100,p:1.0,c:22.0,fiber:0,fat:0},
-  {slot:"Snacks",name:"PICS Semi-Sweet Chocolate Chips",portion:"42g (Single Bag Serving)",cal:196,p:1.4,c:28.0,fiber:2.8,fat:11.2},
-  {slot:"Lunch",name:"PB2 & Jelly Sandwich",portion:"1 Sandwich (100g)",cal:138,p:15.0,c:24.2,fiber:14.2,fat:2.5},
-  {slot:"Lunch",name:"Triple PB2 & J Sandwich Stack",portion:"3 Sandwiches",cal:495,p:54.0,c:87.0,fiber:51.0,fat:9.0},
-  {slot:"Dinner",name:"Cooked Pasta",portion:"200g Cooked",cal:316,p:11.6,c:61.8,fiber:3.6,fat:1.8},
-  {slot:"Lunch",name:"Cooked Chicken Breast",portion:"200g (7 oz)",cal:330,p:62.0,c:0.0,fiber:0,fat:7.2},
-  {slot:"Dinner",name:"Cooked Chicken Thighs",portion:"140g Cooked",cal:292,p:34.6,c:0.0,fiber:0,fat:15.1},
-  {slot:"Lunch",name:"Cooked White Rice",portion:"200g Cooked",cal:260,p:5.4,c:56.4,fiber:0.8,fat:0.6},
-  {slot:"Dinner",name:"Cooked White Rice (Large)",portion:"400g Cooked",cal:520,p:10.8,c:112.8,fiber:1.6,fat:1.2},
-  {slot:"Dinner",name:"Baked Sweet Potato",portion:"200g (7 oz)",cal:180,p:4.0,c:41.4,fiber:6.6,fat:0.2},
-  {slot:"Snacks",name:"Greek Yogurt Dip (Frank's + Ranch)",portion:"100g",cal:60,p:10.0,c:4.0,fiber:0,fat:0.3},
-  {slot:"Snacks",name:"Light Cream",portion:"2 fl oz",cal:116,p:1.6,c:2.2,fiber:0,fat:11.6},
-  {slot:"Snacks",name:"Premier Protein Shake",portion:"1 bottle (11.5 fl oz)",cal:160,p:30.0,c:3.0,fiber:1.0,fat:3.0}
+  {slot:"Dinner",name:"Canned Chunk Chicken Breast",baseQty:224,baseUnit:"g",cal:240,p:44.0,c:4.0,fiber:0.0,fat:4.0},
+  {slot:"Dinner",name:"Great Value Long Grain Rice Pouch (Coconut)",baseQty:240,baseUnit:"g",cal:360,p:7.0,c:72.0,fiber:3.0,fat:6.0},
+  {slot:"Dinner",name:"Butter",baseQty:14,baseUnit:"g",cal:102,p:0.1,c:0.0,fiber:0.0,fat:11.5},
+  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Regular, No Oil/Mayo)",baseQty:1,baseUnit:"serving",cal:530,p:39.0,c:66.0,fiber:3.0,fat:11.5},
+  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Extra Cheese, No Oil/Mayo)",baseQty:1,baseUnit:"serving",cal:650,p:48.0,c:67.0,fiber:3.0,fat:20.5},
+  {slot:"Dinner",name:"Toaster Pastries",baseQty:96,baseUnit:"g",cal:350,p:3.0,c:62.0,fiber:1.0,fat:8.0},
+  {slot:"Breakfast",name:"1% Low-Fat Milk",baseQty:32,baseUnit:"fl oz",cal:416,p:32.0,c:48.0,fiber:0.0,fat:9.6},
+  {slot:"Breakfast",name:"2% Reduced-Fat Milk",baseQty:32,baseUnit:"fl oz",cal:480,p:32.0,c:48.0,fiber:0.0,fat:19.2},
+  {slot:"Snacks",name:"PICS Caramel Rice Cake",baseQty:1,baseUnit:"cake",cal:50,p:0.5,c:11.0,fiber:0.0,fat:0.0},
+  {slot:"Snacks",name:"PICS Semi-Sweet Chocolate Chips",baseQty:42,baseUnit:"g",cal:196,p:1.4,c:28.0,fiber:2.8,fat:11.2},
+  {slot:"Lunch",name:"PB2 & Jelly Sandwich",baseQty:100,baseUnit:"g",cal:138,p:15.0,c:24.2,fiber:14.2,fat:2.5},
+  {slot:"Lunch",name:"Triple PB2 & J Sandwich Stack",baseQty:3,baseUnit:"serving",cal:495,p:54.0,c:87.0,fiber:51.0,fat:9.0},
+  {slot:"Dinner",name:"Cooked Pasta",baseQty:100,baseUnit:"g",cal:158,p:5.8,c:30.9,fiber:1.8,fat:0.9},
+  {slot:"Lunch",name:"Cooked Chicken Breast",baseQty:100,baseUnit:"g",cal:165,p:31.0,c:0.0,fiber:0.0,fat:3.6},
+  {slot:"Dinner",name:"Cooked Chicken Thighs",baseQty:100,baseUnit:"g",cal:209,p:24.7,c:0.0,fiber:0.0,fat:10.9},
+  {slot:"Lunch",name:"Cooked White Rice",baseQty:100,baseUnit:"g",cal:130,p:2.7,c:28.2,fiber:0.4,fat:0.3},
+  {slot:"Dinner",name:"Baked Sweet Potato",baseQty:100,baseUnit:"g",cal:90,p:2.0,c:20.7,fiber:3.3,fat:0.1},
+  {slot:"Snacks",name:"Greek Yogurt Dip (Frank's + Ranch)",baseQty:100,baseUnit:"g",cal:60,p:10.0,c:4.0,fiber:0.0,fat:0.3},
+  {slot:"Snacks",name:"Light Cream",baseQty:1,baseUnit:"fl oz",cal:58,p:0.8,c:1.1,fiber:0.0,fat:5.8},
+  {slot:"Snacks",name:"Premier Protein Shake",baseQty:1,baseUnit:"serving",cal:160,p:30.0,c:3.0,fiber:1.0,fat:3.0}
 ];
 
 function getVaultList(){
-  const saved = localStorage.getItem("bobsMacroVaultItems");
+  const saved = localStorage.getItem("bobsMacroVaultItemsV2");
   if(saved){
     try {
       const parsed = JSON.parse(saved);
       if(Array.isArray(parsed) && parsed.length) return parsed;
     } catch(e){}
   }
-  localStorage.setItem("bobsMacroVaultItems", JSON.stringify(DEFAULT_DATABASE));
+  localStorage.setItem("bobsMacroVaultItemsV2", JSON.stringify(DEFAULT_DATABASE));
   return DEFAULT_DATABASE;
 }
 
 function saveVaultList(list){
-  localStorage.setItem("bobsMacroVaultItems", JSON.stringify(list));
+  localStorage.setItem("bobsMacroVaultItemsV2", JSON.stringify(list));
   filterItems();
   triggerAutoSync();
 }
@@ -320,7 +383,7 @@ function restoreFromGoogleDrive() {
 
   window.handleDriveRestoreVault = function(remoteData) {
     if (Array.isArray(remoteData) && remoteData.length) {
-      localStorage.setItem("bobsMacroVaultItems", JSON.stringify(remoteData));
+      localStorage.setItem("bobsMacroVaultItemsV2", JSON.stringify(remoteData));
       filterItems();
       alert("\uD83D\uDCE5 Data restored from Google Drive successfully!");
     } else {
@@ -346,7 +409,7 @@ function filterItems(){
   const slot = document.getElementById("slotFilter").value;
   const list = getVaultList();
   activeList = list.filter(item=>{
-    const matchesSearch = item.name.toLowerCase().includes(q) || item.portion.toLowerCase().includes(q);
+    const matchesSearch = item.name.toLowerCase().includes(q) || (item.baseUnit||"").toLowerCase().includes(q);
     const matchesSlot = slot === "All" || item.slot.toLowerCase() === slot.toLowerCase();
     return matchesSearch && matchesSlot;
   });
@@ -368,7 +431,7 @@ function renderCards(items){
         <div class="card-header">
           <div>
             <div class="item-name">${item.name}</div>
-            <div class="portion">${item.portion}</div>
+            <div class="portion">As-is: ${item.baseQty} ${item.baseUnit}</div>
           </div>
           <span class="tag">${item.slot}</span>
         </div>
@@ -381,7 +444,7 @@ function renderCards(items){
         </div>
       </div>
       <div class="actions">
-        <button class="copy-btn" id="btn_${idx}" onclick="copyJson(${idx})">&#x1F4CB; Copy JSON</button>
+        <button class="copy-btn" onclick="openScaleModal(${idx})">&#x2696;&#xFE0F; Scale &amp; Copy JSON</button>
         <button class="del-btn" onclick="deleteItem(${idx})">&#x1F5D1;&#xFE0F;</button>
       </div>
     `;
@@ -389,32 +452,85 @@ function renderCards(items){
   });
 }
 
-function copyJson(index){
-  const item = activeList[index];
-  if(!item) return;
-  const snippet = {
-    slot: item.slot,
-    name: item.name,
-    portion: item.portion,
-    cal: item.cal,
-    p: item.p,
-    c: item.c,
-    fiber: item.fiber || 0,
-    fat: item.fat
+let activeScaleItem = null;
+function openScaleModal(index){
+  activeScaleItem = activeList[index];
+  if(!activeScaleItem) return;
+
+  document.getElementById("scaleItemTitle").textContent = activeScaleItem.name;
+  document.getElementById("scaleItemBase").textContent = `Base: ${activeScaleItem.baseQty} ${activeScaleItem.baseUnit} (${activeScaleItem.cal} kcal)`;
+  
+  // Default to Lunch or Dinner, preferring item's current slot if matching
+  const slotSelect = document.getElementById("scaleMealSelect");
+  if(activeScaleItem.slot === "Lunch" || activeScaleItem.slot === "Dinner"){
+    slotSelect.value = activeScaleItem.slot;
+  } else {
+    slotSelect.value = "Dinner";
+  }
+
+  document.getElementById("scalePortionAmount").value = activeScaleItem.baseQty;
+  document.getElementById("scalePortionUnit").value = activeScaleItem.baseUnit || "g";
+
+  updateLiveScaledPreview();
+  toggleScaleModal(true);
+}
+
+function getUnitMultiplier(sourceUnit, targetUnit){
+  if(sourceUnit === targetUnit) return 1.0;
+  // Weight: dry oz to grams
+  if(sourceUnit === "g" && targetUnit === "oz") return 28.3495; // input oz -> multiply by 28.35g
+  if(sourceUnit === "oz" && targetUnit === "g") return 1 / 28.3495;
+  // Fluid: fl oz
+  return 1.0;
+}
+
+function calculateCurrentScaledValues(){
+  if(!activeScaleItem) return null;
+  const inputQty = parseFloat(document.getElementById("scalePortionAmount").value) || 0;
+  const targetUnit = document.getElementById("scalePortionUnit").value;
+  const baseQty = activeScaleItem.baseQty || 1;
+  const baseUnit = activeScaleItem.baseUnit || targetUnit;
+
+  let multiplier = 1.0;
+  if(baseUnit === "g" && targetUnit === "oz"){
+    multiplier = (inputQty * 28.3495) / baseQty;
+  } else if(baseUnit === "oz" && targetUnit === "g"){
+    multiplier = (inputQty / 28.3495) / baseQty;
+  } else {
+    multiplier = inputQty / baseQty;
+  }
+
+  const mealSlot = document.getElementById("scaleMealSelect").value;
+  return {
+    slot: mealSlot,
+    name: activeScaleItem.name,
+    portion: `${inputQty} ${targetUnit}`,
+    cal: Math.round(activeScaleItem.cal * multiplier),
+    p: +((activeScaleItem.p * multiplier).toFixed(1)),
+    c: +((activeScaleItem.c * multiplier).toFixed(1)),
+    fiber: +(((activeScaleItem.fiber || 0) * multiplier).toFixed(1)),
+    fat: +((activeScaleItem.fat * multiplier).toFixed(1))
   };
-  const jsonStr = JSON.stringify(snippet, null, 2);
+}
+
+function updateLiveScaledPreview(){
+  const s = calculateCurrentScaledValues();
+  if(!s) return;
+  document.getElementById("prevCal").textContent = s.cal;
+  document.getElementById("prevP").textContent = `${s.p}g`;
+  document.getElementById("prevC").textContent = `${s.c}g`;
+  document.getElementById("prevF").textContent = `${s.fat}g`;
+  document.getElementById("prevFib").textContent = `${s.fiber}g`;
+}
+
+function executeScaledCopy(){
+  const s = calculateCurrentScaledValues();
+  if(!s) return;
+
+  const jsonStr = JSON.stringify(s, null, 2);
   navigator.clipboard.writeText(jsonStr).then(()=>{
+    toggleScaleModal(false);
     showToast();
-    const btn = document.getElementById(`btn_${index}`);
-    if(btn){
-      const originalText = btn.innerHTML;
-      btn.innerHTML = "&#x2705; Copied!";
-      btn.classList.add("copied");
-      setTimeout(()=>{
-        btn.innerHTML = originalText;
-        btn.classList.remove("copied");
-      }, 1500);
-    }
   });
 }
 
@@ -424,14 +540,19 @@ function showToast(){
   setTimeout(()=>t.classList.remove("show"), 1800);
 }
 
-function toggleModal(show){
+function toggleScaleModal(show){
+  document.getElementById("scaleModal").classList.toggle("hidden", !show);
+}
+
+function toggleAddModal(show){
   document.getElementById("addModal").classList.toggle("hidden", !show);
 }
 
 function saveNewItem(){
-  const slot = document.getElementById("newSlot").value.trim() || "Dinner";
+  const slot = document.getElementById("newSlot").value;
   const name = document.getElementById("newName").value.trim();
-  const portion = document.getElementById("newPortion").value.trim() || "1 serving";
+  const baseQty = parseFloat(document.getElementById("newBaseQty").value) || 100;
+  const baseUnit = document.getElementById("newBaseUnit").value;
   const cal = parseFloat(document.getElementById("newCal").value) || 0;
   const p = parseFloat(document.getElementById("newP").value) || 0;
   const c = parseFloat(document.getElementById("newC").value) || 0;
@@ -444,11 +565,11 @@ function saveNewItem(){
   }
 
   const list = getVaultList();
-  list.unshift({ slot, name, portion, cal, p, c, fiber, fat });
+  list.unshift({ slot, name, baseQty, baseUnit, cal, p, c, fiber, fat });
   saveVaultList(list);
-  toggleModal(false);
+  toggleAddModal(false);
   
-  ["newName","newPortion","newCal","newP","newC","newFat"].forEach(id => document.getElementById(id).value = "");
+  ["newName","newBaseQty","newCal","newP","newC","newFat"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newFib").value = "0";
 }
 
@@ -457,7 +578,7 @@ function deleteItem(index){
   if(!item) return;
   if(confirm(`Remove "${item.name}" from your vault?`)){
     const list = getVaultList();
-    const filtered = list.filter(x => x.name !== item.name || x.portion !== item.portion);
+    const filtered = list.filter(x => x.name !== item.name || x.baseQty !== item.baseQty);
     saveVaultList(filtered);
   }
 }
