@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Bob's Macro JSON Vault</title>
+<style>
+:root{
+  --bg:#070b12;--panel:#111827;--panel2:#0b1220;--line:#2f3a4c;--soft:#1f2937;
+  --text:#e5e7eb;--muted:#94a3b8;--blue:#3b82f6;--green:#22c55e;
+  --orange:#f59e0b;--cyan:#06b6d4;--purple:#a855f7;--red:#ef4444;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:radial-gradient(circle at top,var(--panel2) 0,var(--bg) 45%,var(--bg) 100%);
+  color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  padding:14px;
+}
+header{
+  max-width:900px;
+  margin:0 auto 16px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.header-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+}
+h1{margin:0;font-size:22px;font-weight:900}
+.subtitle{font-size:13px;color:var(--muted)}
+.sync-indicator{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-size:11px;
+  font-weight:800;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--panel2);
+  color:var(--muted);
+  transition:all .3s;
+}
+.sync-indicator.syncing{color:var(--orange);border-color:var(--orange)}
+.sync-indicator.synced{color:var(--green);border-color:var(--green)}
+.sync-indicator.error{color:var(--red);border-color:var(--red)}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+input,select,button{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel2);
+  color:var(--text);
+  padding:10px 12px;
+  font-size:14px;
+}
+input{flex:1;min-width:180px}
+select{width:auto}
+button{
+  background:var(--blue);
+  color:white;
+  font-weight:800;
+  cursor:pointer;
+  border:none;
+}
+button.secondary{background:var(--soft);color:var(--text);border:1px solid var(--line)}
+button.greenbtn{background:var(--green);color:#000}
+.toast{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--green);
+  color:#000;
+  padding:10px 18px;
+  border-radius:999px;
+  font-weight:900;
+  font-size:13px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.25s ease;
+  box-shadow:0 6px 20px rgba(0,0,0,0.4);
+  z-index:99;
+}
+.toast.show{opacity:1}
+.grid{
+  max-width:900px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  gap:12px;
+}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.item-name{font-size:15px;font-weight:900;line-height:1.25}
+.tag{
+  font-size:10px;
+  padding:3px 7px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(59,130,246,0.15);
+  color:var(--blue);
+  font-weight:800;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.portion{font-size:12px;color:var(--muted);margin-top:4px}
+.macro-strip{
+  display:flex;
+  justify-content:space-between;
+  margin:12px 0;
+  padding:8px 0;
+  border-top:1px solid rgba(255,255,255,0.06);
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  font-size:12px;
+}
+.macro-strip strong{font-size:14px}
+.actions{display:flex;gap:6px}
+.copy-btn{
+  width:100%;
+  padding:8px;
+  border-radius:10px;
+  font-size:13px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.copy-btn.copied{
+  background:var(--green);
+  color:#000;
+}
+.del-btn{
+  width:auto;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(239,68,68,0.2);
+  color:var(--red);
+  border:1px solid rgba(239,68,68,0.4);
+}
+.add-modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(4px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:14px;
+  z-index:90;
+}
+.modal-card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:18px;
+  width:100%;
+  max-width:420px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1>Bob's Macro JSON Vault &#x1F4BE;</h1>
+      <div class="subtitle">Cloud-Synced Macro Library &bull; Ready for Tracker Import</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span id="syncStatusBadge" class="sync-indicator synced">&#x2601;&#xFE0F; Synced</span>
+      <button class="greenbtn" style="padding:6px 10px;font-size:12px" onclick="syncToGoogleDrive(false)">&#x2601;&#xFE0F; Force Sync</button>
+      <button class="secondary" style="padding:6px 10px;font-size:12px" onclick="restoreFromGoogleDrive()">&#x1F4E5; Restore</button>
+    </div>
+  </div>
+  <div class="controls">
+    <input id="searchBar" type="text" placeholder="Search chicken, rice, pastries, milk..." oninput="filterItems()">
+    <select id="slotFilter" onchange="filterItems()">
+      <option value="All">All Slots</option>
+      <option value="Breakfast">Breakfast</option>
+      <option value="Lunch">Lunch</option>
+      <option value="Dinner">Dinner</option>
+      <option value="Snacks">Snacks</option>
+    </select>
+    <button onclick="toggleModal(true)">+ Add Food Item</button>
+  </div>
+</header>
+
+<main>
+  <div id="vaultGrid" class="grid"></div>
+</main>
+
+<div id="toast" class="toast">JSON Copied to Clipboard!</div>
+
+<div id="addModal" class="add-modal hidden">
+  <div class="modal-card">
+    <h3 style="margin:0">Add New Food / Meal</h3>
+    <input id="newSlot" placeholder="Slot (Breakfast, Lunch, Dinner, Snacks)" value="Dinner">
+    <input id="newName" placeholder="Item Name (e.g. Rice Chex Cereal)">
+    <input id="newPortion" placeholder="Portion (e.g. 1 Bowl / 60g)">
+    <div class="modal-grid">
+      <input id="newCal" type="number" placeholder="Calories (kcal)">
+      <input id="newP" type="number" step="0.1" placeholder="Protein (g)">
+      <input id="newC" type="number" step="0.1" placeholder="Carbs (g)">
+      <input id="newFat" type="number" step="0.1" placeholder="Fat (g)">
+    </div>
+    <input id="newFib" type="number" step="0.1" placeholder="Fiber (g)" value="0">
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button style="flex:1" onclick="saveNewItem()">Save to Cloud</button>
+      <button style="flex:1" class="secondary" onclick="toggleModal(false)">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmF3EulnV9FtW40ma82jEf2BY-i5RWsUHjKvIUXrOVP1gbcEv6GoylIG6iEanrnK72/exec";
+
+const DEFAULT_DATABASE = [
+  {slot:"Dinner",name:"Canned Chunk Chicken Breast (Whole Can)",portion:"1 Can (8 oz / 224g drained)",cal:240,p:44.0,c:4.0,fiber:0,fat:4.0},
+  {slot:"Dinner",name:"Great Value Long Grain Rice Pouch (Coconut)",portion:"1 Pouch (240g)",cal:360,p:7.0,c:72.0,fiber:3.0,fat:6.0},
+  {slot:"Dinner",name:"Butter",portion:"1 tbsp (14g)",cal:102,p:0.1,c:0.0,fiber:0,fat:11.5},
+  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Regular, No Oil/Mayo)",portion:"1 Sub (Regular)",cal:530,p:39.0,c:66.0,fiber:3.0,fat:11.5},
+  {slot:"Lunch",name:"Jersey Mike's #7 Turkey & Provolone (Regular w/ Extra Cheese, No Oil/Mayo)",portion:"1 Sub (Regular w/ Extra Cheese)",cal:650,p:48.0,c:67.0,fiber:3.0,fat:20.5},
+  {slot:"Dinner",name:"Toaster Pastries",portion:"1 Pack (2 pastries / 96g)",cal:350,p:3.0,c:62.0,fiber:1.0,fat:8.0},
+  {slot:"Breakfast",name:"1% Low-Fat Milk",portion:"32 fl oz (960ml)",cal:416,p:32.0,c:48.0,fiber:0,fat:9.6},
+  {slot:"Breakfast",name:"2% Reduced-Fat Milk",portion:"32 fl oz (960ml)",cal:480,p:32.0,c:48.0,fiber:0,fat:19.2},
+  {slot:"Snacks",name:"PICS Caramel Rice Cake",portion:"1 Cake (13g)",cal:50,p:0.5,c:11.0,fiber:0,fat:0},
+  {slot:"Snacks",name:"PICS Caramel Rice Cakes (2 Cakes)",portion:"2 Cakes (26g)",cal:100,p:1.0,c:22.0,fiber:0,fat:0},
+  {slot:"Snacks",name:"PICS Semi-Sweet Chocolate Chips",portion:"42g (Single Bag Serving)",cal:196,p:1.4,c:28.0,fiber:2.8,fat:11.2},
+  {slot:"Lunch",name:"PB2 & Jelly Sandwich",portion:"1 Sandwich (100g)",cal:138,p:15.0,c:24.2,fiber:14.2,fat:2.5},
+  {slot:"Lunch",name:"Triple PB2 & J Sandwich Stack",portion:"3 Sandwiches",cal:495,p:54.0,c:87.0,fiber:51.0,fat:9.0},
+  {slot:"Dinner",name:"Cooked Pasta",portion:"200g Cooked",cal:316,p:11.6,c:61.8,fiber:3.6,fat:1.8},
+  {slot:"Lunch",name:"Cooked Chicken Breast",portion:"200g (7 oz)",cal:330,p:62.0,c:0.0,fiber:0,fat:7.2},
+  {slot:"Dinner",name:"Cooked Chicken Thighs",portion:"140g Cooked",cal:292,p:34.6,c:0.0,fiber:0,fat:15.1},
+  {slot:"Lunch",name:"Cooked White Rice",portion:"200g Cooked",cal:260,p:5.4,c:56.4,fiber:0.8,fat:0.6},
+  {slot:"Dinner",name:"Cooked White Rice (Large)",portion:"400g Cooked",cal:520,p:10.8,c:112.8,fiber:1.6,fat:1.2},
+  {slot:"Dinner",name:"Baked Sweet Potato",portion:"200g (7 oz)",cal:180,p:4.0,c:41.4,fiber:6.6,fat:0.2},
+  {slot:"Snacks",name:"Greek Yogurt Dip (Frank's + Ranch)",portion:"100g",cal:60,p:10.0,c:4.0,fiber:0,fat:0.3},
+  {slot:"Snacks",name:"Light Cream",portion:"2 fl oz",cal:116,p:1.6,c:2.2,fiber:0,fat:11.6},
+  {slot:"Snacks",name:"Premier Protein Shake",portion:"1 bottle (11.5 fl oz)",cal:160,p:30.0,c:3.0,fiber:1.0,fat:3.0}
+];
+
+function getVaultList(){
+  const saved = localStorage.getItem("bobsMacroVaultItems");
+  if(saved){
+    try {
+      const parsed = JSON.parse(saved);
+      if(Array.isArray(parsed) && parsed.length) return parsed;
+    } catch(e){}
+  }
+  localStorage.setItem("bobsMacroVaultItems", JSON.stringify(DEFAULT_DATABASE));
+  return DEFAULT_DATABASE;
+}
+
+function saveVaultList(list){
+  localStorage.setItem("bobsMacroVaultItems", JSON.stringify(list));
+  filterItems();
+  triggerAutoSync();
+}
+
+let syncDebounceTimer = null;
+function triggerAutoSync(){
+  const badge = document.getElementById("syncStatusBadge");
+  if(badge){
+    badge.textContent = "\u2601\uFE0F Syncing...";
+    badge.className = "sync-indicator syncing";
+  }
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(()=>{
+    syncToGoogleDrive(true);
+  }, 1200);
+}
+
+async function syncToGoogleDrive(silent=false) {
+  const badge = document.getElementById("syncStatusBadge");
+  try {
+    const payload = JSON.stringify(getVaultList());
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: payload,
+      mode: "no-cors"
+    });
+    if(badge){
+      badge.textContent = "\u2601\uFE0F Synced";
+      badge.className = "sync-indicator synced";
+    }
+    if(!silent) alert("\u2601\uFE0F Vault synced to Google Drive successfully!");
+  } catch (err) {
+    if(badge){
+      badge.textContent = "\u26A0\uFE0F Sync Error";
+      badge.className = "sync-indicator error";
+    }
+    if(!silent) alert("Sync error: " + err.message);
+  }
+}
+
+function restoreFromGoogleDrive() {
+  const scriptId = "drive_jsonp_loader_vault";
+  const existing = document.getElementById(scriptId);
+  if (existing) existing.remove();
+
+  window.handleDriveRestoreVault = function(remoteData) {
+    if (Array.isArray(remoteData) && remoteData.length) {
+      localStorage.setItem("bobsMacroVaultItems", JSON.stringify(remoteData));
+      filterItems();
+      alert("\uD83D\uDCE5 Data restored from Google Drive successfully!");
+    } else {
+      alert("No valid backup found on Google Drive.");
+    }
+    const s = document.getElementById(scriptId);
+    if (s) s.remove();
+    delete window.handleDriveRestoreVault;
+  };
+
+  const script = document.createElement("script");
+  script.id = scriptId;
+  script.src = `${GOOGLE_SCRIPT_URL}?callback=handleDriveRestoreVault&t=${Date.now()}`;
+  script.onerror = function() {
+    alert("Could not connect to Google Drive. Check internet connection.");
+  };
+  document.body.appendChild(script);
+}
+
+let activeList = [];
+function filterItems(){
+  const q = document.getElementById("searchBar").value.toLowerCase().trim();
+  const slot = document.getElementById("slotFilter").value;
+  const list = getVaultList();
+  activeList = list.filter(item=>{
+    const matchesSearch = item.name.toLowerCase().includes(q) || item.portion.toLowerCase().includes(q);
+    const matchesSlot = slot === "All" || item.slot.toLowerCase() === slot.toLowerCase();
+    return matchesSearch && matchesSlot;
+  });
+  renderCards(activeList);
+}
+
+function renderCards(items){
+  const grid = document.getElementById("vaultGrid");
+  grid.innerHTML = "";
+  if(!items.length){
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">No items match your search.</div>`;
+    return;
+  }
+  items.forEach((item, idx)=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div>
+        <div class="card-header">
+          <div>
+            <div class="item-name">${item.name}</div>
+            <div class="portion">${item.portion}</div>
+          </div>
+          <span class="tag">${item.slot}</span>
+        </div>
+        <div class="macro-strip">
+          <div><strong>${item.cal}</strong><br><small style="color:var(--muted)">kcal</small></div>
+          <div><strong style="color:var(--blue)">${item.p}g</strong><br><small style="color:var(--muted)">Pro</small></div>
+          <div><strong style="color:var(--cyan)">${item.c}g</strong><br><small style="color:var(--muted)">Carb</small></div>
+          <div><strong style="color:var(--orange)">${item.fat}g</strong><br><small style="color:var(--muted)">Fat</small></div>
+          <div><strong style="color:var(--green)">${item.fiber||0}g</strong><br><small style="color:var(--muted)">Fib</small></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="copy-btn" id="btn_${idx}" onclick="copyJson(${idx})">&#x1F4CB; Copy JSON</button>
+        <button class="del-btn" onclick="deleteItem(${idx})">&#x1F5D1;&#xFE0F;</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function copyJson(index){
+  const item = activeList[index];
+  if(!item) return;
+  const snippet = {
+    slot: item.slot,
+    name: item.name,
+    portion: item.portion,
+    cal: item.cal,
+    p: item.p,
+    c: item.c,
+    fiber: item.fiber || 0,
+    fat: item.fat
+  };
+  const jsonStr = JSON.stringify(snippet, null, 2);
+  navigator.clipboard.writeText(jsonStr).then(()=>{
+    showToast();
+    const btn = document.getElementById(`btn_${index}`);
+    if(btn){
+      const originalText = btn.innerHTML;
+      btn.innerHTML = "&#x2705; Copied!";
+      btn.classList.add("copied");
+      setTimeout(()=>{
+        btn.innerHTML = originalText;
+        btn.classList.remove("copied");
+      }, 1500);
+    }
+  });
+}
+
+function showToast(){
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+function toggleModal(show){
+  document.getElementById("addModal").classList.toggle("hidden", !show);
+}
+
+function saveNewItem(){
+  const slot = document.getElementById("newSlot").value.trim() || "Dinner";
+  const name = document.getElementById("newName").value.trim();
+  const portion = document.getElementById("newPortion").value.trim() || "1 serving";
+  const cal = parseFloat(document.getElementById("newCal").value) || 0;
+  const p = parseFloat(document.getElementById("newP").value) || 0;
+  const c = parseFloat(document.getElementById("newC").value) || 0;
+  const fat = parseFloat(document.getElementById("newFat").value) || 0;
+  const fiber = parseFloat(document.getElementById("newFib").value) || 0;
+
+  if(!name){
+    alert("Please enter a name for the food item.");
+    return;
+  }
+
+  const list = getVaultList();
+  list.unshift({ slot, name, portion, cal, p, c, fiber, fat });
+  saveVaultList(list);
+  toggleModal(false);
+  
+  ["newName","newPortion","newCal","newP","newC","newFat"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("newFib").value = "0";
+}
+
+function deleteItem(index){
+  const item = activeList[index];
+  if(!item) return;
+  if(confirm(`Remove "${item.name}" from your vault?`)){
+    const list = getVaultList();
+    const filtered = list.filter(x => x.name !== item.name || x.portion !== item.portion);
+    saveVaultList(filtered);
+  }
+}
+
+filterItems();
+</script>
+</body>
+</html>
